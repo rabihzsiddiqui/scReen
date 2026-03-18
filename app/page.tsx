@@ -157,11 +157,7 @@ export default function Home() {
       <div className="p-6 max-w-5xl mx-auto space-y-5">
         {/* hero */}
         <div className="pt-4 pb-2">
-          <h1 className="text-5xl font-bold tracking-tight leading-[1.1]">
-            scReen
-            <span className="inline-block w-[0.08em] h-[0.08em] ml-[0.04em] align-baseline bg-cyan-400" />
-          </h1>
-          <p className="text-zinc-400 text-base mt-2 leading-relaxed">
+          <p className="text-zinc-400 text-base leading-relaxed">
             compare any two displays side-by-side at accurate physical scale.
           </p>
           <div className="flex items-center gap-2 mt-3 flex-wrap">

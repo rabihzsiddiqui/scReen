@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-10 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 px-6 py-3 flex items-center">
+    <header className="sticky top-0 z-10 bg-zinc-950/90 backdrop-blur-md px-6 py-3 flex items-center">
       <Link
         href="/"
         className="text-xl font-semibold tracking-tight text-zinc-100 hover:text-white transition-colors duration-200"

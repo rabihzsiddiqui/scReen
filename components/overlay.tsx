@@ -16,6 +16,14 @@ interface OverlayProps {
   onRotate: (instanceId: number) => void;
 }
 
+interface DragState {
+  instanceId: number;
+  startMouseX: number;
+  startMouseY: number;
+  startRectX: number;
+  startRectY: number;
+}
+
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
@@ -62,6 +70,10 @@ export function Overlay({ displays, hoveredId, onHoverChange, onRotate }: Overla
   const rectRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const prefersReducedMotion = useReducedMotion();
 
+  // per-instance dragged positions (absolute px within container)
+  const [positions, setPositions] = useState<Map<number, { x: number; y: number }>>(new Map());
+  const [dragging, setDragging] = useState<DragState | null>(null);
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -75,12 +87,33 @@ export function Overlay({ displays, hoveredId, onHoverChange, onRotate }: Overla
     return () => ro.disconnect();
   }, []);
 
+  // clean up stale positions when displays are removed
+  useEffect(() => {
+    const ids = new Set(displays.map((d) => d.instanceId));
+    setPositions((prev) => {
+      const next = new Map(prev);
+      for (const id of prev.keys()) {
+        if (!ids.has(id)) next.delete(id);
+      }
+      return next;
+    });
+  }, [displays]);
+
+  // end drag on mouseup anywhere
+  useEffect(() => {
+    if (!dragging) return;
+    function onMouseUp() {
+      setDragging(null);
+    }
+    window.addEventListener("mouseup", onMouseUp);
+    return () => window.removeEventListener("mouseup", onMouseUp);
+  }, [dragging]);
+
   const { width: cw, height: ch } = size;
 
   // largest area renders first (behind), smallest on top
   const sorted = [...displays].sort((a, b) => b.area - a.area);
 
-  // for phones and tablets, portrait is the default (height > width visually)
   function effectiveDims(d: ActiveDisplay): { ew: number; eh: number } {
     const isPortable = d.type === "phone" || d.type === "tablet";
     const inPortrait = isPortable && !d.rotated;
@@ -119,13 +152,32 @@ export function Overlay({ displays, hoveredId, onHoverChange, onRotate }: Overla
     [sorted, onHoverChange]
   );
 
+  function handleMouseMove(e: React.MouseEvent) {
+    if (!dragging) return;
+    const dx = e.clientX - dragging.startMouseX;
+    const dy = e.clientY - dragging.startMouseY;
+    setPositions((prev) => {
+      const next = new Map(prev);
+      next.set(dragging.instanceId, {
+        x: dragging.startRectX + dx,
+        y: dragging.startRectY + dy,
+      });
+      return next;
+    });
+  }
+
   return (
     <div
       ref={containerRef}
       role="group"
       aria-label="display comparison overlay"
       className="relative w-full bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden"
-      style={{ height: "520px", minHeight: "300px" }}
+      style={{
+        height: "520px",
+        minHeight: "300px",
+        cursor: dragging ? "grabbing" : "default",
+      }}
+      onMouseMove={handleMouseMove}
     >
       {/* dot grid background */}
       <svg
@@ -162,11 +214,17 @@ export function Overlay({ displays, hoveredId, onHoverChange, onRotate }: Overla
           const { ew, eh } = effectiveDims(d);
           const w = Math.round(ew * scale);
           const h = Math.round(eh * scale);
-          const x = Math.round(cw / 2 - w / 2);
-          const y = Math.round(ch - PADDING - h);
+
+          // auto-layout: centered horizontally, bottom-aligned
+          const autoX = Math.round(cw / 2 - w / 2);
+          const autoY = Math.round(ch - PADDING - h);
+          const saved = positions.get(d.instanceId);
+          const x = saved ? saved.x : autoX;
+          const y = saved ? saved.y : autoY;
 
           const isPortable = d.type === "phone" || d.type === "tablet";
           const inPortrait = isPortable && !d.rotated;
+          const isActiveDrag = dragging?.instanceId === d.instanceId;
 
           const isHovered = hoveredId === d.instanceId;
           const isDimmed = hoveredId !== null && !isHovered;
@@ -174,9 +232,10 @@ export function Overlay({ displays, hoveredId, onHoverChange, onRotate }: Overla
 
           const sharedOpacity: React.CSSProperties = {
             opacity: isDimmed ? 0.25 : 1,
-            transition: prefersReducedMotion
-              ? "opacity 200ms ease"
-              : "opacity 200ms ease, width 200ms ease, height 200ms ease, left 200ms ease, top 200ms ease",
+            transition:
+              prefersReducedMotion || isActiveDrag
+                ? "opacity 200ms ease"
+                : "opacity 200ms ease, width 200ms ease, height 200ms ease, left 200ms ease, top 200ms ease",
           };
 
           return (
@@ -231,12 +290,25 @@ export function Overlay({ displays, hoveredId, onHoverChange, onRotate }: Overla
                   height: h,
                   border: `2px solid ${d.accent}`,
                   backgroundColor: `${d.accent}0d`,
-                  zIndex: isHovered ? 10 : 1,
-                  cursor: "default",
+                  zIndex: isActiveDrag ? 12 : isHovered ? 10 : 1,
+                  cursor: isActiveDrag ? "grabbing" : "grab",
+                  userSelect: "none",
                   ...sharedOpacity,
                 }}
-                onMouseEnter={() => onHoverChange(d.instanceId)}
-                onMouseLeave={() => onHoverChange(null)}
+                onMouseDown={(e) => {
+                  if (e.button !== 0) return;
+                  e.preventDefault();
+                  setDragging({
+                    instanceId: d.instanceId,
+                    startMouseX: e.clientX,
+                    startMouseY: e.clientY,
+                    startRectX: x,
+                    startRectY: y,
+                  });
+                  onHoverChange(d.instanceId);
+                }}
+                onMouseEnter={() => { if (!dragging) onHoverChange(d.instanceId); }}
+                onMouseLeave={() => { if (!dragging) onHoverChange(null); }}
                 onFocus={() => onHoverChange(d.instanceId)}
                 onBlur={() => onHoverChange(null)}
                 onKeyDown={(e) => handleRectKeyDown(e, d.instanceId)}
@@ -275,6 +347,7 @@ export function Overlay({ displays, hoveredId, onHoverChange, onRotate }: Overla
                       e.stopPropagation();
                       onRotate(d.instanceId);
                     }}
+                    onMouseDown={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                     className="absolute bottom-1.5 right-1.5 w-5 h-5 flex items-center justify-center rounded text-zinc-600 hover:text-zinc-200 transition-colors duration-150 focus-ring"
                     aria-label={`rotate ${d.name} to ${inPortrait ? "landscape" : "portrait"}`}
