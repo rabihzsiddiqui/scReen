@@ -16,6 +16,7 @@ import { PresetBrowser } from "@/components/preset-browser";
 import { CustomForm } from "@/components/custom-form";
 import { SiteHeader } from "@/components/site-header";
 import { decodePresetsFromSearch, updateUrlState } from "@/lib/url-state";
+import type { DecodedEntry } from "@/lib/url-state";
 
 const ACCENT_PALETTE = [
   "#22d3ee", // cyan-400
@@ -31,7 +32,8 @@ const ACCENT_PALETTE = [
 function makeActiveDisplay(
   preset: DisplayPreset,
   instanceId: number,
-  accent: string
+  accent: string,
+  rotated = false
 ): ActiveDisplay {
   const { width, height } = calcPhysicalDimensions(
     preset.diagonal,
@@ -41,7 +43,7 @@ function makeActiveDisplay(
   const ppi = calcPPI(preset.diagonal, preset.resW, preset.resH);
   const aspectRatio = formatAspectRatio(preset.resW, preset.resH);
   const area = calcArea(width, height);
-  return { ...preset, width, height, ppi, aspectRatio, area, instanceId, accent };
+  return { ...preset, width, height, ppi, aspectRatio, area, instanceId, accent, rotated };
 }
 
 type Panel = "preset" | "custom" | null;
@@ -56,10 +58,10 @@ export default function Home() {
   const mountedRef = useRef(false);
   const liveRegionId = useId();
 
-  function nextDisplay(preset: DisplayPreset): ActiveDisplay {
+  function nextDisplay(preset: DisplayPreset, rotated = false): ActiveDisplay {
     const instanceId = ++instanceIdRef.current;
     const accent = ACCENT_PALETTE[(instanceId - 1) % ACCENT_PALETTE.length];
-    return makeActiveDisplay(preset, instanceId, accent);
+    return makeActiveDisplay(preset, instanceId, accent, rotated);
   }
 
   const addDisplay = useCallback((presetId: string) => {
@@ -83,7 +85,9 @@ export default function Home() {
   useEffect(() => {
     const restored = decodePresetsFromSearch(window.location.search);
     if (restored.length > 0) {
-      setActiveDisplays(restored.map((preset) => nextDisplay(preset)));
+      setActiveDisplays(
+        restored.map(({ preset, rotated }: DecodedEntry) => nextDisplay(preset, rotated))
+      );
     } else {
       updateUrlState([]);
     }
@@ -107,6 +111,14 @@ export default function Home() {
       return prev.filter((d) => d.instanceId !== instanceId);
     });
     setHoveredId((prev) => (prev === instanceId ? null : prev));
+  }, []);
+
+  const toggleRotation = useCallback((instanceId: number) => {
+    setActiveDisplays((prev) =>
+      prev.map((d) =>
+        d.instanceId === instanceId ? { ...d, rotated: !d.rotated } : d
+      )
+    );
   }, []);
 
   const clearAll = useCallback(() => {
@@ -227,6 +239,7 @@ export default function Home() {
           displays={activeDisplays}
           hoveredId={hoveredId}
           onHoverChange={setHoveredId}
+          onRotate={toggleRotation}
         />
 
         {/* spec table */}

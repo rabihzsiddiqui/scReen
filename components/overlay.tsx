@@ -13,6 +13,19 @@ interface OverlayProps {
   displays: ActiveDisplay[];
   hoveredId: number | null;
   onHoverChange: (id: number | null) => void;
+  onRotate: (instanceId: number) => void;
+}
+
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return reduced;
 }
 
 function niceScaleBar(scale: number): { px: number; label: string } {
@@ -24,10 +37,30 @@ function niceScaleBar(scale: number): { px: number; label: string } {
   return { px: nice * scale, label: `${nice} in` };
 }
 
-export function Overlay({ displays, hoveredId, onHoverChange }: OverlayProps) {
+function RotateIcon() {
+  return (
+    <svg
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      width={10}
+      height={10}
+      aria-hidden="true"
+    >
+      <path d="M2 6a4 4 0 1 0 4-4" />
+      <polyline points="6 0 6 2 4 2" />
+    </svg>
+  );
+}
+
+export function Overlay({ displays, hoveredId, onHoverChange, onRotate }: OverlayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const rectRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     const el = containerRef.current;
@@ -47,10 +80,17 @@ export function Overlay({ displays, hoveredId, onHoverChange }: OverlayProps) {
   // largest area renders first (behind), smallest on top
   const sorted = [...displays].sort((a, b) => b.area - a.area);
 
+  // for phones and tablets, portrait is the default (height > width visually)
+  function effectiveDims(d: ActiveDisplay): { ew: number; eh: number } {
+    const isPortable = d.type === "phone" || d.type === "tablet";
+    const inPortrait = isPortable && !d.rotated;
+    return { ew: inPortrait ? d.height : d.width, eh: inPortrait ? d.width : d.height };
+  }
+
   let scale = 1;
   if (displays.length > 0 && cw > 0 && ch > 0) {
-    const maxW = Math.max(...displays.map((d) => d.width));
-    const maxH = Math.max(...displays.map((d) => d.height));
+    const maxW = Math.max(...displays.map((d) => effectiveDims(d).ew));
+    const maxH = Math.max(...displays.map((d) => effectiveDims(d).eh));
     scale = Math.min(
       (cw - PADDING * 2) / maxW,
       (ch - PADDING * 2) / maxH
@@ -119,10 +159,14 @@ export function Overlay({ displays, hoveredId, onHoverChange }: OverlayProps) {
       {/* display rectangles, labels, annotations */}
       {cw > 0 &&
         sorted.map((d) => {
-          const w = Math.round(d.width * scale);
-          const h = Math.round(d.height * scale);
+          const { ew, eh } = effectiveDims(d);
+          const w = Math.round(ew * scale);
+          const h = Math.round(eh * scale);
           const x = Math.round(cw / 2 - w / 2);
           const y = Math.round(ch - PADDING - h);
+
+          const isPortable = d.type === "phone" || d.type === "tablet";
+          const inPortrait = isPortable && !d.rotated;
 
           const isHovered = hoveredId === d.instanceId;
           const isDimmed = hoveredId !== null && !isHovered;
@@ -130,7 +174,9 @@ export function Overlay({ displays, hoveredId, onHoverChange }: OverlayProps) {
 
           const sharedOpacity: React.CSSProperties = {
             opacity: isDimmed ? 0.25 : 1,
-            transition: "opacity 200ms ease",
+            transition: prefersReducedMotion
+              ? "opacity 200ms ease"
+              : "opacity 200ms ease, width 200ms ease, height 200ms ease, left 200ms ease, top 200ms ease",
           };
 
           return (
@@ -176,7 +222,7 @@ export function Overlay({ displays, hoveredId, onHoverChange }: OverlayProps) {
                 }}
                 role="button"
                 tabIndex={0}
-                aria-label={`${d.name}, ${d.diagonal} inch, ${Math.round(d.ppi)} PPI`}
+                aria-label={`${d.name}, ${d.diagonal} inch, ${Math.round(d.ppi)} PPI${isPortable ? (inPortrait ? ", portrait" : ", landscape") : ""}`}
                 className="absolute animate-display-in focus-ring"
                 style={{
                   left: x,
@@ -221,6 +267,22 @@ export function Overlay({ displays, hoveredId, onHoverChange }: OverlayProps) {
                     </div>
                   </div>
                 )}
+
+                {/* rotate button — phones and tablets only */}
+                {isPortable && h >= 28 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRotate(d.instanceId);
+                    }}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    className="absolute bottom-1.5 right-1.5 w-5 h-5 flex items-center justify-center rounded text-zinc-600 hover:text-zinc-200 transition-colors duration-150 focus-ring"
+                    aria-label={`rotate ${d.name} to ${inPortrait ? "landscape" : "portrait"}`}
+                    title={inPortrait ? "rotate to landscape" : "rotate to portrait"}
+                  >
+                    <RotateIcon />
+                  </button>
+                )}
               </div>
 
               {/* dimension annotations — only on hover */}
@@ -237,7 +299,7 @@ export function Overlay({ displays, hoveredId, onHoverChange }: OverlayProps) {
                       zIndex: 20,
                     }}
                   >
-                    {d.width.toFixed(1)}&quot;
+                    {ew.toFixed(1)}&quot;
                   </div>
                   {/* physical height, vertically centered to the right */}
                   <div
@@ -250,7 +312,7 @@ export function Overlay({ displays, hoveredId, onHoverChange }: OverlayProps) {
                       zIndex: 20,
                     }}
                   >
-                    {d.height.toFixed(1)}&quot;
+                    {eh.toFixed(1)}&quot;
                   </div>
                 </>
               )}

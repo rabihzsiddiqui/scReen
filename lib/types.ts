@@ -52,4 +52,10 @@ export interface ActiveDisplay extends ComputedDisplay {
   instanceId: number;
   /** accent color assigned from the cycling palette */
   accent: string;
+  /**
+   * only meaningful for phones and tablets.
+   * false (default) = portrait orientation (tall).
+   * true = rotated to landscape.
+   */
+  rotated?: boolean;
 }
