@@ -98,7 +98,7 @@ export default function AboutPage() {
               <span className="mt-1 inline-block w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
               <div>
                 <span className="text-emerald-400 font-medium text-sm">
-                  high — above 220 PPI
+                  high: above 220 PPI
                 </span>
                 <p className="text-zinc-500 text-sm mt-0.5 leading-relaxed">
                   modern phones, retina laptops, high-DPI monitors. individual
@@ -110,7 +110,7 @@ export default function AboutPage() {
               <span className="mt-1 inline-block w-2 h-2 rounded-full bg-amber-400 shrink-0" />
               <div>
                 <span className="text-amber-400 font-medium text-sm">
-                  mid — 110 to 220 PPI
+                  mid: 110 to 220 PPI
                 </span>
                 <p className="text-zinc-500 text-sm mt-0.5 leading-relaxed">
                   most monitors and standard laptops. sharp at arm&apos;s
@@ -122,7 +122,7 @@ export default function AboutPage() {
               <span className="mt-1 inline-block w-2 h-2 rounded-full bg-rose-400 shrink-0" />
               <div>
                 <span className="text-rose-400 font-medium text-sm">
-                  low — below 110 PPI
+                  low: below 110 PPI
                 </span>
                 <p className="text-zinc-500 text-sm mt-0.5 leading-relaxed">
                   large TVs and older displays. lower density is expected and
@@ -217,7 +217,7 @@ export default function AboutPage() {
             a 400 PPI phone and a 40 PPI TV can both qualify as retina for
             their context. what matters is whether individual pixels are
             distinguishable at the actual viewing distance, not the raw number.
-            this is also why scReen&apos;s density tiers use fixed thresholds —
+            this is also why scReen&apos;s density tiers use fixed thresholds.
             they&apos;re optimized for comparison, not for declaring any single
             display &ldquo;good&rdquo; or &ldquo;bad.&rdquo;
           </p>

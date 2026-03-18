@@ -173,12 +173,6 @@ export default function Home() {
                 {b}
               </span>
             ))}
-            <a
-              href="#tool"
-              className="ml-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors duration-200"
-            >
-              get started
-            </a>
           </div>
         </div>
 
