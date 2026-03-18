@@ -4,8 +4,18 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "scReen",
-  description: "browser-native display size comparison tool. compare screens to scale.",
+  title: "scReen - compare display sizes to scale",
+  description: "browser-native display size comparison tool. compare screens to scale. no uploads, no tracking.",
+  openGraph: {
+    title: "scReen - compare display sizes to scale",
+    description: "browser-native display size comparison tool. compare screens to scale. no uploads, no tracking.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "scReen - compare display sizes to scale",
+    description: "browser-native display size comparison tool. compare screens to scale. no uploads, no tracking.",
+  },
 };
 
 export default function RootLayout({

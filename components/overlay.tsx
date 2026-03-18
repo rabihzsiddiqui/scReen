@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useRef, useEffect, useState } from "react";
+import { Fragment, useRef, useEffect, useState, useCallback } from "react";
 import type { ActiveDisplay } from "@/lib/types";
 
 const PADDING = 40;
@@ -27,6 +27,7 @@ function niceScaleBar(scale: number): { px: number; label: string } {
 export function Overlay({ displays, hoveredId, onHoverChange }: OverlayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const rectRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   useEffect(() => {
     const el = containerRef.current;
@@ -58,9 +59,31 @@ export function Overlay({ displays, hoveredId, onHoverChange }: OverlayProps) {
 
   const scaleBar = displays.length > 0 && cw > 0 ? niceScaleBar(scale) : null;
 
+  const handleRectKeyDown = useCallback(
+    (e: React.KeyboardEvent, instanceId: number) => {
+      if (sorted.length <= 1) return;
+      const idx = sorted.findIndex((d) => d.instanceId === instanceId);
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        const next = sorted[(idx + 1) % sorted.length];
+        rectRefs.current.get(next.instanceId)?.focus();
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const prev = sorted[(idx - 1 + sorted.length) % sorted.length];
+        rectRefs.current.get(prev.instanceId)?.focus();
+      } else if (e.key === "Escape") {
+        onHoverChange(null);
+        (e.currentTarget as HTMLElement).blur();
+      }
+    },
+    [sorted, onHoverChange]
+  );
+
   return (
     <div
       ref={containerRef}
+      role="group"
+      aria-label="display comparison overlay"
       className="relative w-full bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden"
       style={{ height: "520px", minHeight: "300px" }}
     >
@@ -147,7 +170,14 @@ export function Overlay({ displays, hoveredId, onHoverChange }: OverlayProps) {
 
               {/* main rectangle */}
               <div
-                className="absolute animate-display-in cursor-default"
+                ref={(el) => {
+                  if (el) rectRefs.current.set(d.instanceId, el);
+                  else rectRefs.current.delete(d.instanceId);
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`${d.name}, ${d.diagonal} inch, ${Math.round(d.ppi)} PPI`}
+                className="absolute animate-display-in focus-ring"
                 style={{
                   left: x,
                   top: y,
@@ -156,10 +186,14 @@ export function Overlay({ displays, hoveredId, onHoverChange }: OverlayProps) {
                   border: `2px solid ${d.accent}`,
                   backgroundColor: `${d.accent}0d`,
                   zIndex: isHovered ? 10 : 1,
+                  cursor: "default",
                   ...sharedOpacity,
                 }}
                 onMouseEnter={() => onHoverChange(d.instanceId)}
                 onMouseLeave={() => onHoverChange(null)}
+                onFocus={() => onHoverChange(d.instanceId)}
+                onBlur={() => onHoverChange(null)}
+                onKeyDown={(e) => handleRectKeyDown(e, d.instanceId)}
               >
                 {/* label inside (large displays) */}
                 {!labelAbove && (

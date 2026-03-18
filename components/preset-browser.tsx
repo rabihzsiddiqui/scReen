@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { presets } from "@/lib/presets";
 import type { DisplayPreset, ActiveDisplay } from "@/lib/types";
 
@@ -47,6 +47,7 @@ interface PresetBrowserProps {
 export function PresetBrowser({ activeDisplays, onAdd }: PresetBrowserProps) {
   const [activeTab, setActiveTab] = useState<TopTab>("phones");
   const [search, setSearch] = useState("");
+  const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const addedIds = useMemo(
     () => new Set(activeDisplays.map((d) => d.id)),
@@ -59,13 +60,48 @@ export function PresetBrowser({ activeDisplays, onAdd }: PresetBrowserProps) {
     ? tabPresets.filter((p) => matchesSearch(p, search))
     : tabPresets;
 
-  function renderRow(p: DisplayPreset) {
+  // flatten filtered list for arrow-key indexing
+  const flatList = useMemo(() => {
+    if (activeTab === "tablets") {
+      return TABLET_SUBCATS.flatMap(({ id }) =>
+        filtered.filter((p) => p.subcategory === id)
+      );
+    }
+    if (activeTab === "laptops") {
+      return LAPTOP_SUBCATS.flatMap(({ id }) =>
+        filtered.filter((p) => p.subcategory === id)
+      );
+    }
+    return filtered;
+  }, [activeTab, filtered]);
+
+  const handleListKeyDown = useCallback(
+    (e: React.KeyboardEvent, idx: number) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        rowRefs.current[(idx + 1) % flatList.length]?.focus();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        rowRefs.current[(idx - 1 + flatList.length) % flatList.length]?.focus();
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onAdd(flatList[idx].id);
+      }
+    },
+    [flatList, onAdd]
+  );
+
+  function renderRow(p: DisplayPreset, flatIdx: number) {
     const added = addedIds.has(p.id);
     return (
       <button
         key={p.id}
+        ref={(el) => { rowRefs.current[flatIdx] = el; }}
+        role="option"
+        aria-selected={added}
         onClick={() => onAdd(p.id)}
-        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-zinc-800/80 transition-colors duration-150"
+        onKeyDown={(e) => handleListKeyDown(e, flatIdx)}
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-zinc-800/80 transition-colors duration-150 focus-ring"
         style={{ opacity: added ? 0.38 : 1 }}
       >
         <span className="flex-1 min-w-0">
@@ -86,7 +122,11 @@ export function PresetBrowser({ activeDisplays, onAdd }: PresetBrowserProps) {
     );
   }
 
+  // reset ref array length on each render so stale refs don't linger
+  rowRefs.current = [];
+
   function renderGrouped(subcats: readonly { id: string; label: string }[]) {
+    let globalIdx = 0;
     const groups = subcats
       .map(({ id, label }) => ({
         id,
@@ -104,7 +144,7 @@ export function PresetBrowser({ activeDisplays, onAdd }: PresetBrowserProps) {
         <div className="text-[10px] font-medium text-zinc-600 uppercase tracking-widest px-3 pt-3 pb-1">
           {label}
         </div>
-        {items.map(renderRow)}
+        {items.map((p) => renderRow(p, globalIdx++))}
       </div>
     ));
   }
@@ -115,7 +155,7 @@ export function PresetBrowser({ activeDisplays, onAdd }: PresetBrowserProps) {
     if (filtered.length === 0) {
       return <p className="text-xs text-zinc-600 px-3 py-4">no results</p>;
     }
-    return <div>{filtered.map(renderRow)}</div>;
+    return <div>{filtered.map((p, i) => renderRow(p, i))}</div>;
   }
 
   return (
@@ -137,7 +177,8 @@ export function PresetBrowser({ activeDisplays, onAdd }: PresetBrowserProps) {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors duration-150 ${
+            aria-pressed={activeTab === tab.id}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors duration-150 focus-ring ${
               activeTab === tab.id
                 ? "bg-cyan-400/15 text-cyan-400 border border-cyan-400/30"
                 : "text-zinc-500 hover:text-zinc-300 border border-transparent"
@@ -149,7 +190,13 @@ export function PresetBrowser({ activeDisplays, onAdd }: PresetBrowserProps) {
       </div>
 
       {/* preset list */}
-      <div className="max-h-64 overflow-y-auto py-1">{renderContent()}</div>
+      <div
+        role="listbox"
+        aria-label="display presets"
+        className="max-h-64 overflow-y-auto py-1"
+      >
+        {renderContent()}
+      </div>
     </div>
   );
 }

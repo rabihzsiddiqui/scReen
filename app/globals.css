@@ -10,23 +10,25 @@ body {
   color: var(--foreground);
 }
 
-@keyframes displayIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes displayIn {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
-.animate-display-in {
-  animation: displayIn 250ms ease forwards;
-}
-
-@media (prefers-reduced-motion: reduce) {
   .animate-display-in {
-    animation: none;
+    animation: displayIn 250ms ease forwards;
   }
+}
+
+/* focus ring — 2px solid cyan-400, 2px offset, focus-visible only */
+.focus-ring:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: 2px;
 }

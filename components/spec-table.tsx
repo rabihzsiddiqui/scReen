@@ -24,10 +24,10 @@ const TYPE_BADGE: Record<DeviceType, { label: string; cls: string }> = {
   custom:  { label: "custom",  cls: "text-zinc-400  bg-zinc-400/10  border border-zinc-400/30"  },
 };
 
-function ppiColor(ppi: number): string {
-  if (ppi >= 200) return "text-emerald-400";
-  if (ppi >= 100) return "text-amber-400";
-  return "text-rose-400";
+function ppiTier(ppi: number): { color: string; label: string } {
+  if (ppi >= 200) return { color: "text-emerald-400", label: "high" };
+  if (ppi >= 100) return { color: "text-amber-400",   label: "mid"  };
+  return             { color: "text-rose-400",        label: "low"  };
 }
 
 function sortValue(d: ActiveDisplay, key: SortKey): string | number {
@@ -106,8 +106,23 @@ export function SpecTable({ displays, hoveredId, onHoverChange }: SpecTableProps
                 return (
                   <th
                     key={col.key}
+                    scope="col"
                     onClick={() => handleSort(col.key)}
-                    className="px-4 py-2.5 text-left cursor-pointer select-none whitespace-nowrap border-b border-zinc-800 bg-zinc-900 hover:bg-zinc-800/60 transition-colors duration-150"
+                    aria-sort={
+                      active
+                        ? sortDir === "asc"
+                          ? "ascending"
+                          : "descending"
+                        : "none"
+                    }
+                    className="px-4 py-2.5 text-left cursor-pointer select-none whitespace-nowrap border-b border-zinc-800 bg-zinc-900 hover:bg-zinc-800/60 transition-colors duration-150 focus-ring"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleSort(col.key);
+                      }
+                    }}
                   >
                     <span className="inline-flex items-center gap-1 uppercase text-[10px] font-medium tracking-widest text-zinc-500">
                       {col.label}
@@ -127,7 +142,8 @@ export function SpecTable({ displays, hoveredId, onHoverChange }: SpecTableProps
               return (
                 <tr
                   key={d.instanceId}
-                  className="border-b border-zinc-800/50 last:border-0 cursor-default"
+                  tabIndex={0}
+                  className="border-b border-zinc-800/50 last:border-0 cursor-default focus-ring"
                   style={{
                     backgroundColor: isHovered ? `${d.accent}12` : undefined,
                     opacity: isDimmed ? 0.35 : 1,
@@ -135,6 +151,8 @@ export function SpecTable({ displays, hoveredId, onHoverChange }: SpecTableProps
                   }}
                   onMouseEnter={() => onHoverChange(d.instanceId)}
                   onMouseLeave={() => onHoverChange(null)}
+                  onFocus={() => onHoverChange(d.instanceId)}
+                  onBlur={() => onHoverChange(null)}
                 >
                   {/* display name + type badge */}
                   <td className="px-4 py-3">
@@ -170,10 +188,20 @@ export function SpecTable({ displays, hoveredId, onHoverChange }: SpecTableProps
                   </td>
 
                   {/* PPI */}
-                  <td
-                    className={`px-4 py-3 font-[family-name:var(--font-geist-mono)] text-xs font-semibold whitespace-nowrap ${ppiColor(d.ppi)}`}
-                  >
-                    {d.ppi}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {(() => {
+                      const tier = ppiTier(d.ppi);
+                      return (
+                        <>
+                          <span className={`font-[family-name:var(--font-geist-mono)] text-xs font-semibold ${tier.color}`}>
+                            {d.ppi}
+                          </span>
+                          <span className={`ml-1.5 text-[9px] font-medium font-[family-name:var(--font-geist-mono)] opacity-60 ${tier.color}`}>
+                            {tier.label}
+                          </span>
+                        </>
+                      );
+                    })()}
                   </td>
 
                   {/* physical width */}
