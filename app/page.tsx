@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect, useId } from "react";
 import { presets } from "@/lib/presets";
 import {
   calcPhysicalDimensions,
@@ -14,6 +14,8 @@ import { SpecTable } from "@/components/spec-table";
 import { DisplayChips } from "@/components/display-chips";
 import { PresetBrowser } from "@/components/preset-browser";
 import { CustomForm } from "@/components/custom-form";
+import { SiteHeader } from "@/components/site-header";
+import { decodePresetsFromSearch, updateUrlState } from "@/lib/url-state";
 
 const ACCENT_PALETTE = [
   "#22d3ee", // cyan-400
@@ -48,7 +50,11 @@ export default function Home() {
   const [activeDisplays, setActiveDisplays] = useState<ActiveDisplay[]>([]);
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [panel, setPanel] = useState<Panel>(null);
+  const [liveMsg, setLiveMsg] = useState("");
   const instanceIdRef = useRef(0);
+  // tracks whether the mount restore has run — suppresses URL sync on first render
+  const mountedRef = useRef(false);
+  const liveRegionId = useId();
 
   function nextDisplay(preset: DisplayPreset): ActiveDisplay {
     const instanceId = ++instanceIdRef.current;
@@ -60,19 +66,46 @@ export default function Home() {
     const preset = presets.find((p) => p.id === presetId);
     if (!preset) return;
     setActiveDisplays((prev) => [...prev, nextDisplay(preset)]);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    setLiveMsg(`${preset.name} added`);
+  }, []);
 
   const addCustomDisplay = useCallback(
     (data: Omit<DisplayPreset, "id">) => {
       const preset: DisplayPreset = { ...data, id: `custom-${Date.now()}` };
       setActiveDisplays((prev) => [...prev, nextDisplay(preset)]);
+      setLiveMsg(`${data.name} added`);
       setPanel(null);
     },
-    [] // eslint-disable-line react-hooks/exhaustive-deps
+    []
   );
 
+  // restore state from URL on mount
+  useEffect(() => {
+    const restored = decodePresetsFromSearch(window.location.search);
+    if (restored.length > 0) {
+      setActiveDisplays(restored.map((preset) => nextDisplay(preset)));
+    } else {
+      updateUrlState([]);
+    }
+    mountedRef.current = true;
+  }, []);
+
+  // sync URL whenever displays change (skip initial render)
+  useEffect(() => {
+    if (!mountedRef.current) return;
+    updateUrlState(activeDisplays);
+  }, [activeDisplays]);
+
+  const copyLink = useCallback(async () => {
+    await navigator.clipboard.writeText(window.location.href);
+  }, []);
+
   const removeDisplay = useCallback((instanceId: number) => {
-    setActiveDisplays((prev) => prev.filter((d) => d.instanceId !== instanceId));
+    setActiveDisplays((prev) => {
+      const removed = prev.find((d) => d.instanceId === instanceId);
+      if (removed) setLiveMsg(`${removed.name} removed`);
+      return prev.filter((d) => d.instanceId !== instanceId);
+    });
     setHoveredId((prev) => (prev === instanceId ? null : prev));
   }, []);
 
@@ -81,47 +114,69 @@ export default function Home() {
     setHoveredId(null);
   }, []);
 
+  // close open panel on Escape
+  useEffect(() => {
+    if (!panel) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setPanel(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [panel]);
+
   function togglePanel(p: Panel) {
     setPanel((prev) => (prev === p ? null : p));
   }
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 font-[family-name:var(--font-geist-sans)]">
-      {/* header */}
-      <header className="sticky top-0 z-10 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 px-6 py-3 flex items-center gap-4">
-        <span className="text-xl font-semibold tracking-tight">
-          scReen
-          <span className="inline-block w-[3px] h-[3px] ml-[1.5px] align-baseline bg-cyan-400" />
-        </span>
-        <div className="flex gap-2">
-          {["open source", "no uploads", "browser-native"].map((b) => (
-            <span
-              key={b}
-              className="text-[10px] font-medium text-zinc-600 border border-zinc-800 rounded px-1.5 py-0.5"
-            >
-              {b}
-            </span>
-          ))}
-        </div>
-      </header>
+      {/* visually-hidden live region for add/remove announcements */}
+      <div
+        id={liveRegionId}
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {liveMsg}
+      </div>
+      <SiteHeader />
 
       <div className="p-6 max-w-5xl mx-auto space-y-5">
         {/* hero */}
-        <div className="pt-2">
-          <h1 className="text-4xl font-bold tracking-tight leading-[1.1]">
-            compare screens
+        <div className="pt-4 pb-2">
+          <h1 className="text-5xl font-bold tracking-tight leading-[1.1]">
+            scReen
             <span className="inline-block w-[0.08em] h-[0.08em] ml-[0.04em] align-baseline bg-cyan-400" />
           </h1>
-          <p className="text-zinc-500 text-sm mt-1">
-            add any two displays and see them side-by-side at accurate physical scale.
+          <p className="text-zinc-400 text-base mt-2 leading-relaxed">
+            compare any two displays side-by-side at accurate physical scale.
           </p>
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            {["open source", "no uploads", "browser-native"].map((b) => (
+              <span
+                key={b}
+                className="text-[10px] font-medium text-zinc-600 border border-zinc-800 rounded px-1.5 py-0.5"
+              >
+                {b}
+              </span>
+            ))}
+            <a
+              href="#tool"
+              className="ml-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors duration-200"
+            >
+              get started
+            </a>
+          </div>
         </div>
 
         {/* controls row */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div id="tool" className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => togglePanel("preset")}
-            className={`px-3.5 py-2 rounded-lg border text-sm font-medium transition-colors duration-150 ${
+            aria-expanded={panel === "preset"}
+            aria-controls="preset-browser-panel"
+            className={`px-3.5 py-2 rounded-lg border text-sm font-medium transition-colors duration-150 focus-ring ${
               panel === "preset"
                 ? "bg-cyan-400/15 border-cyan-400/40 text-cyan-400"
                 : "bg-zinc-900 border-zinc-700/60 text-zinc-300 hover:border-zinc-600 hover:text-zinc-200"
@@ -131,7 +186,9 @@ export default function Home() {
           </button>
           <button
             onClick={() => togglePanel("custom")}
-            className={`px-3.5 py-2 rounded-lg border text-sm font-medium transition-colors duration-150 ${
+            aria-expanded={panel === "custom"}
+            aria-controls="custom-form-panel"
+            className={`px-3.5 py-2 rounded-lg border text-sm font-medium transition-colors duration-150 focus-ring ${
               panel === "custom"
                 ? "bg-cyan-400/15 border-cyan-400/40 text-cyan-400"
                 : "bg-zinc-900 border-zinc-700/60 text-zinc-300 hover:border-zinc-600 hover:text-zinc-200"
@@ -143,11 +200,17 @@ export default function Home() {
 
         {/* preset browser panel */}
         {panel === "preset" && (
-          <PresetBrowser activeDisplays={activeDisplays} onAdd={addDisplay} />
+          <div id="preset-browser-panel">
+            <PresetBrowser activeDisplays={activeDisplays} onAdd={addDisplay} />
+          </div>
         )}
 
         {/* custom form panel */}
-        {panel === "custom" && <CustomForm onAdd={addCustomDisplay} />}
+        {panel === "custom" && (
+          <div id="custom-form-panel">
+            <CustomForm onAdd={addCustomDisplay} />
+          </div>
+        )}
 
         {/* active display chips */}
         <DisplayChips
@@ -156,6 +219,7 @@ export default function Home() {
           onHoverChange={setHoveredId}
           onRemove={removeDisplay}
           onClearAll={clearAll}
+          onCopyLink={copyLink}
         />
 
         {/* overlay canvas */}
